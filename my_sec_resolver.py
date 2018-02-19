@@ -5,7 +5,6 @@ import dns.name
 import dns.query
 import dns.dnssec
 import dns.resolver
-from dns.exception import DNSException
 
 root_servers = [
             '198.41.0.4',
@@ -26,24 +25,22 @@ root_servers = [
 
 message_size = 0
 
-# This function takes in the domain and server as function parameters.
-# This function is used for building chain of trust.
-# It returns the DS and Algorithm.
+# https://newsletter.dnsimple.com/dnssec-record-types-part-two/
 def resolve_component_parent(domain_search, server):
     global message_size
     result = []
     ds = None
     algorithm = -1
     try:
-        query = dns.message.make_query(domain_search,
-                                       dns.rdatatype.DNSKEY,
-                                       want_dnssec=True)
+        query = dns.message.make_query(domain_search, dns.rdatatype.DNSKEY, want_dnssec=True)
         response = dns.query.tcp(query, server, timeout=1)
         message_size += sys.getsizeof(response)
 
+        #print("Response - " + str(response))
+
         rcode = response.rcode()
         if rcode != dns.rcode.NOERROR:
-            return (None, None, None)
+            return None, None, None
 
         # Extract DS and Algorithm from the authority section of the response.
         if len(response.authority) > 0:
@@ -92,7 +89,7 @@ def resolve_component_child(domain_search, server):
         rcode = response.rcode()
         if rcode != dns.rcode.NOERROR:
             if rcode == dns.rcode.NXDOMAIN:
-                raise Exception('Error in response')
+                return None, None, None
 
         if len(response.answer) > 0:
             for rrset in response.answer:
@@ -270,12 +267,11 @@ def format_result(result, domain, category):
                 new_domain = result.answer[0].items[0].target.to_text()
                 format_result(resolve_domain_category(new_domain, category), new_domain, category)
 
+
 if __name__ == '__main__':
     
     category = 'A' 
     domain = sys.argv[1]
-    if len(sys.argv) > 2:
-        category = sys.argv[2]
 
     if domain:
         start_time = int(round(time.time() * 1000))
