@@ -22,13 +22,15 @@ root_servers = [
             '202.12.27.33'
         ]
 
+ROOT_DS_1 = "19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5"
+ROOT_DS_2 = "20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D"
 
 message_size = 0
 
 # https://newsletter.dnsimple.com/dnssec-record-types-part-two/
-def resolve_component_parent(domain_search, server):
+def get_parent_zone_details(domain_search, server):
     global message_size
-    result = []
+    servers = []
     ds = None
     algorithm = -1
     try:
@@ -42,86 +44,94 @@ def resolve_component_parent(domain_search, server):
         if rcode != dns.rcode.NOERROR:
             return None, None, None
 
-        # Extract DS and Algorithm from the authority section of the response.
+        # If authority has SOA return, else set ds and algo
         if len(response.authority) > 0:
-            for rrset in response.authority:
-                rr = rrset[0]
-                if rrset.rdtype == dns.rdatatype.DS:
-                    ds = rr
-                    algorithm = rr.digest_type
+            for auth_record in response.authority:
+                if auth_record.rdtype == dns.rdatatype.DS:
+                    ds = auth_record[0]
+                    algorithm = auth_record[0].digest_type
 
-            rrset = response.authority[0]
+            if response.authority[0][0] == dns.rdatatype.SOA:
+                servers.append(server)
+                return servers, ds, algorithm
+
+        # if answer is found, return
+        if len(response.answer) > 0:
+            servers.append(server)
+            return servers, ds, algorithm
+
+        authority = response.authority[0][0].target.to_text()
+        if len(response.additional) > 0:
+            for rr in response.additional:
+                 servers.append(rr[0].to_text())
         else:
-            rrset = response.answer[0]
-
-        rr = rrset[0]
-        if rr.rdtype == dns.rdatatype.SOA:
-            result.append(server)
-        elif len(response.answer) > 0:
-            result.append(server)
-        else:
-            authority = rr.target.to_text()
-            if len(response.additional) > 0:
-                rrset = response.additional
-                for rr in rrset:
-                    result.append(rr[0].to_text())
-            else:
-                result = get_domain_servers(authority)
-
+            servers = get_domain_servers(authority)
+            
     except Exception:
         return None, None, None
 
-    return result, ds, algorithm
+    return servers, ds, algorithm
 
-# Query for DNSKEY and RRSIG(DNSKEY) from the child server.
-# This data is used for verifying chain of trust.
-# Also used for verifying the DNSKEY of the child server.
-def resolve_component_child(domain_search, server):
-    dnskey = None
-    rrsig_dnskey = None
-    dnskey_record = None
+# https://newsletter.dnsimple.com/dnssec-record-types/
+def extract_zsk_rrsig_rrset(response):
+    ZSK = None
+    RRSIG = None
+    RRset = None
+
+    print(response)
+
+    for rrset in response.answer:
+        if rrset.rdtype == dns.rdatatype.DNSKEY:
+            RRset = rrset
+            for record in rrset:
+                if record.flags == 257:
+                    ZSK = record
+        elif rrset.rdtype == dns.rdatatype.RRSIG:
+            RRSIG = rrset
+        else:
+            pass
+    return (ZSK, RRSIG, RRset)
+
+def get_child_zone_details(domain_search, server):
+    ZSK = None
+    RRSIG = None
+    RRset = None
     try:
-        query = dns.message.make_query(domain_search,
-                                       dns.rdatatype.DNSKEY,
-                                       want_dnssec=True)
+        query = dns.message.make_query(domain_search, dns.rdatatype.DNSKEY, want_dnssec=True)
         response = dns.query.tcp(query, server, timeout=1)
+        #print(response)
 
-        rcode = response.rcode()
-        if rcode != dns.rcode.NOERROR:
-            if rcode == dns.rcode.NXDOMAIN:
-                return None, None, None
+        if response.rcode() != dns.rcode.NOERROR and response.rcode() == dns.rcode.NXDOMAIN:
+            return None, None, None
 
         if len(response.answer) > 0:
             for rrset in response.answer:
                 if rrset.rdtype == dns.rdatatype.DNSKEY:
-                    dnskey_record = rrset
-                    for r in rrset:
-                        if r.flags == 257:
-                            dnskey = r
+                    RRset = rrset
+                    for record in rrset:
+                        if record.flags == 257:
+                            ZSK = record
                 elif rrset.rdtype == dns.rdatatype.RRSIG:
-                    rrsig_dnskey = rrset
+                    RRSIG = rrset
+                else:
+                    pass
 
     except Exception:
         return None, None, None
 
-    return dnskey, rrsig_dnskey, dnskey_record
+    return ZSK, RRSIG, RRset
 
-# Validate the root server.
-# Static chain of trust test is done.
-# DNSKEY verification done by querying for '.' against the root server.
+# https://serverfault.com/questions/584570/can-i-reasonably-use-sha-256-in-a-dnssec-deployment
+# only validation with sha-256 is required for root servers
 def validate_root_server(server):
-    ds1 = '19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5'
-    ds2 = '20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D'
-
-    (dnskey, rrsig_dnskey, dnskey_record) = resolve_component_child('.', server)
-    if not dnskey:
+    (ZSK, RRSIG, RRset) = get_child_zone_details('.', server)
+    if not ZSK and not RRSIG and not RRset:
         return False
 
-    hash_key = dns.dnssec.make_ds('.', dnskey, 'sha256')
-    if str(hash_key) == ds1.lower() or str(hash_key) == ds2.lower():
-        name = dns.name.from_text('.')
+    digest = dns.dnssec.make_ds('.', ZSK, 'sha256')
+    if str(digest) == ROOT_DS_1.lower() or str(digest) == ROOT_DS_2.lower():
         try:
-            dns.dnssec.validate(dnskey_record, rrsig_dnskey, {name: dnskey_record})
+            dns.dnssec.validate(RRset, RRSIG, {dns.name.from_text('.'): RRset})
         except dns.dnssec.ValidationFailure:
             print('DNSSEC verification failed')
             return False
@@ -130,20 +140,61 @@ def validate_root_server(server):
         return False
 
 def get_tld_server_details(tld_domain):
-    result = None
+    servers = None
     ds = None
     algorithm = -1
     for root_server in root_servers:
         try:
             if validate_root_server(root_server):
-                (result, ds, algorithm) = resolve_component_parent(tld_domain, root_server)
-            if result:
+                (servers, ds, algorithm) = get_parent_zone_details(tld_domain, root_server)
+            if servers:
                 break
         except:
             # Try other root server
             pass
-    return (result, ds, algorithm)
+    return (servers, ds, algorithm)
 
+def verify_dnssec(algo, ds, dnskey, rrsig_dnskey, dnskey_record, search_domain):
+    if algo and ds and dnskey and rrsig_dnskey:
+        if algo == 1:
+            algo = 'sha1'
+        else:
+            algo = 'sha256'
+        if dns.dnssec.make_ds(search_domain, dnskey, algo) != ds:
+            print("DNSSEC verification failed")
+            return False
+
+        try:
+            dns.dnssec.validate(dnskey_record, rrsig_dnskey, {dns.name.from_text(search_domain): dnskey_record})
+            return True
+        except dns.dnssec.ValidationFailure:
+            print('DNSSEC verification failed')
+            return False
+    else:
+        print("DNSSEC not supported")
+        return False
+
+
+def get_validate_dnssec_support(search_domain, servers, algo, ds):
+    ZSK = None
+    RRSIG = None
+    RRset = None
+    index = 0
+    while not ZSK or not RRSIG:
+        if index == len(servers):
+            break
+        ZSK, RRSIG, RRset = get_child_zone_details(search_domain, servers[index])        
+        index = index + 1
+
+    if index == len(servers):
+        print("DNSSEC not supported")
+        return index, ZSK, RRSIG, RRset
+
+    if not verify_dnssec(algo, ds, ZSK, RRSIG, RRset, search_domain):
+        return len(servers), ZSK, RRSIG, RRset
+    return index, ZSK, RRSIG, RRset        
+
+    
 
 # Starting from root dns, this method finally resolves dns level by level.
 # However, its different from non-secure dns in its implementation.
@@ -156,70 +207,31 @@ def get_domain_servers(domain):
     algorithm = None
     ds = None 
     (servers, ds, algorithm) = get_tld_server_details(search_domain)
+    
     if not servers:
         return None
-
-    root_index = 0
-
-    domain_parts = str(domain).split('.')
-
-    del domain_parts[-1]
-    domain_search = domain_parts[-1] + '.'
-
-
-    del domain_parts[-1]
-    domain_parts = ['@'] + domain_parts
-    for part in reversed(domain_parts):
+    
+    for ind in range(2, len(sub_domains)):
+        current_domain = sub_domains[ind]
         server_index = 0
         result = None
         dnskey = None
         rrsig_dnskey = None
 
-        # Query for the DNSKEY and RRSIG(DNSKEY) from the child server.
-        # If DNSKEY or RRSIG(DNSKEY) does not exist, it mean DNSSEC is not supported.
-        while not dnskey or not rrsig_dnskey:
-            (dnskey, rrsig_dnskey, dnskey_record) = resolve_component_child(domain_search, servers[server_index])
-            server_index += 1
-            if server_index == len(servers):
-                print("DNSSEC not supported")
-                return None
-
-        # Check for chain of trust between parent and child.
-        # For this we are creating DS from child's DNSKEY and compare it against DS from parent.
-        # If anything fails in this step, it means that DNSSEC verification failed.
-        if algorithm and ds and dnskey and rrsig_dnskey:
-            if algorithm == 1:
-                algorithm = 'sha1'
-            else:
-                algorithm = 'sha256'
-            hash_key = dns.dnssec.make_ds(domain_search, dnskey, algorithm)
-            if hash_key != ds:
-                print("DNSSEC verification failed")
-                return None
-
-            name = dns.name.from_text(domain_search)
-            try:
-                dns.dnssec.validate(dnskey_record, rrsig_dnskey, {name: dnskey_record})
-            except dns.dnssec.ValidationFailure:
-                print('DNSSEC verification failed')
-                return None
-        else:
-            print("DNSSEC not supported")
-            return None
-
-        if part == '@':
-            break
-
-        domain_search = part + '.' + domain_search
+        server_index, dnskey, rrsig_dnskey, dnskey_record = get_validate_dnssec_support( \
+            search_domain, servers, algorithm, ds)
+        if server_index == len(servers):
+            return None            
+        
+        
+        search_domain = current_domain + '.' + search_domain
         while not result:
             try:
-                # Query for the DS, Algorithm and nameserver address from the server.
-                # This will be used later for verifying chain of trust.
-                (result, ds, algorithm) = resolve_component_parent(domain_search, servers[server_index])
+                (result, ds, algorithm) = get_parent_zone_details(search_domain, servers[server_index])
                 if result:
                     servers = result
                 else:
-                    raise Exception('Result Empty')
+                    raise Exception('Try next server')
             except Exception:
                 server_index += 1
                 if server_index == len(servers):
@@ -267,7 +279,8 @@ def format_result(result, domain, category):
                 new_domain = result.answer[0].items[0].target.to_text()
                 format_result(resolve_domain_category(new_domain, category), new_domain, category)
 
-
+# As explained here tcp was used
+# https://serverfault.com/questions/404840/when-do-dns-queries-use-tcp-instead-of-udp
 if __name__ == '__main__':
     
     category = 'A' 

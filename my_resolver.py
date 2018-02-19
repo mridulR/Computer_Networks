@@ -34,7 +34,7 @@ message_size = 0
 # http://www.dnspython.org/docs/1.15.0/dns.message.Message-class.html
 def get_sub_domain_servers(domain, server, category):
     global message_size
-    result = []
+    servers = []
     try:
         query = dns.message.make_query(domain, category)
         response = dns.query.udp(query, server, timeout=1)
@@ -46,30 +46,30 @@ def get_sub_domain_servers(domain, server, category):
 
         # if answer is found, return
         if len(response.answer) > 0:
-            result.append(server)
-            return result
+            servers.append(server)
+            return servers
 
         # if SOA data type in authority, then also return
         if len(response.authority) > 0:
             rrset = response.authority[0]
             if rrset[0].rdtype == dns.rdatatype.SOA:
-                result.append(server)
-                return result
+                servers.append(server)
+                return servers
         # if no answer or SOA found resolve NS
-        while len(result) == 0:
+        while len(servers) == 0:
             for auth_record in response.authority:
                 authority = auth_record[0].target.to_text()
                 if len(response.additional) > 0:
                     rrset = response.additional
                     for rr in rrset:
-                        result.append(rr[0].to_text())
+                        servers.append(rr[0].to_text())
                 else:
-                    result = get_domain_servers(authority, category)
-                if len(result) != 0:
+                    servers = get_domain_servers(authority, category)
+                if len(servers) != 0:
                     break
     except Exception:
         return None
-    return result
+    return servers
 
 def get_tld_servers(tld_domain, category):
     tld_servers = None
