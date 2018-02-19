@@ -151,30 +151,33 @@ def format_result(result, domain, category):
                 new_domain = result.answer[0].items[0].target.to_text()
                 format_result(resolve_domain_category(new_domain, category), new_domain, category)
 
-if __name__ == '__main__':
+def main(domain, category):
    
+    if domain and category:
+        start_time = int(round(time.time() * 1000))
+        global message_size
+        message_size = 0
+        result = resolve_domain_category(domain, category);
+        if result:
+            print()
+            print('QUESTION SECTION:')
+            for ques in result.question:
+                print(ques)
+            print()    
+            print('ANSWER SECTION:')
+            format_result(result, domain, category)
+            print()
+            print("Query Time: " + str(int(round(time.time() * 1000)) - start_time) + " msec")
+            print("WHEN: " + str(time.strftime("%c")))
+            print("MSG SIZE rcvd : " + str(message_size))
+            print()
+
+    else:
+        print("Domain and Category shoudn't be empty for resolution.")
+
+if __name__ == '__main__':
     category = 'A'
     domain = sys.argv[1]
     if len(sys.argv) > 2:
         category = sys.argv[2]
-
-    if domain and category:
-        start_time = int(round(time.time() * 1000))
-        #global message_size
-        message_size = 0
-        result = resolve_domain_category(domain, category);
-        print()
-        print('QUESTION SECTION:')
-        for ques in result.question:
-            print(ques)
-        print()    
-        print('ANSWER SECTION:')
-        format_result(result, domain, category)
-        print()
-        print("Query Time: " + str(int(round(time.time() * 1000)) - start_time) + " msec")
-        print("WHEN: " + str(time.strftime("%c")))
-        print("MSG SIZE rcvd : " + str(message_size))
-        print()
-
-    else:
-        print("Domain and Category shoudn't be empty for resolution.")
+    main(domain, category)    

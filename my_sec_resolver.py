@@ -281,11 +281,8 @@ def format_result(result, domain, category):
 
 # As explained here tcp was used
 # https://serverfault.com/questions/404840/when-do-dns-queries-use-tcp-instead-of-udp
-if __name__ == '__main__':
+def main(domain, category):
     
-    category = 'A' 
-    domain = sys.argv[1]
-
     if domain:
         start_time = int(round(time.time() * 1000))
         result = resolve_domain_category(domain, category)
@@ -303,4 +300,13 @@ if __name__ == '__main__':
             print("MSG SIZE rcvd : " + str(message_size))
             print()
     else:
-        print("Domain cannot be empty") 
+        print("Domain cannot be empty")
+
+if __name__ == '__main__':
+    category = 'A' 
+    domain = sys.argv[1]
+    if (len(sys.argv) > 2):
+        category = sys.argv[2]
+    main(domain, category)
+
+
