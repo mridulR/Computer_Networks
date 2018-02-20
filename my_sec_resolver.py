@@ -31,8 +31,8 @@ message_size = 0
 def get_parent_zone_details(domain_search, server):
     global message_size
     servers = []
-    ds = None
-    algorithm = -1
+    ds_record = None
+    hash_algo = -1
     try:
         query = dns.message.make_query(domain_search, dns.rdatatype.DNSKEY, want_dnssec=True)
         response = dns.query.tcp(query, server, timeout=1)
@@ -44,21 +44,21 @@ def get_parent_zone_details(domain_search, server):
         if rcode != dns.rcode.NOERROR:
             return None, None, None
 
-        # If authority has SOA return, else set ds and algo
+        # If authority has SOA return, else set ds_record and algo
         if len(response.authority) > 0:
             for auth_record in response.authority:
                 if auth_record.rdtype == dns.rdatatype.DS:
-                    ds = auth_record[0]
-                    algorithm = auth_record[0].digest_type
+                    ds_record = auth_record[0]
+                    hash_algo = auth_record[0].digest_type
 
             if response.authority[0][0] == dns.rdatatype.SOA:
                 servers.append(server)
-                return servers, ds, algorithm
+                return servers, ds_record, hash_algo
 
         # if answer is found, return
         if len(response.answer) > 0:
             servers.append(server)
-            return servers, ds, algorithm
+            return servers, ds_record, hash_algo
 
         authority = response.authority[0][0].target.to_text()
         if len(response.additional) > 0:
@@ -70,9 +70,10 @@ def get_parent_zone_details(domain_search, server):
     except Exception:
         return None, None, None
 
-    return servers, ds, algorithm
+    return servers, ds_record, hash_algo
 
 # https://newsletter.dnsimple.com/dnssec-record-types/
+# @TODO : Bug while traversing response, Fix it
 def extract_zsk_rrsig_rrset(response):
     ZSK = None
     RRSIG = None
@@ -92,6 +93,7 @@ def extract_zsk_rrsig_rrset(response):
             pass
     return (ZSK, RRSIG, RRset)
 
+# https://newsletter.dnsimple.com/dnssec-record-types/
 def get_child_zone_details(domain_search, server):
     ZSK = None
     RRSIG = None
@@ -141,26 +143,26 @@ def validate_root_server(server):
 
 def get_tld_server_details(tld_domain):
     servers = None
-    ds = None
-    algorithm = -1
+    ds_record = None
+    hash_algo = -1
     for root_server in root_servers:
         try:
             if validate_root_server(root_server):
-                (servers, ds, algorithm) = get_parent_zone_details(tld_domain, root_server)
+                (servers, ds_record, hash_algo) = get_parent_zone_details(tld_domain, root_server)
             if servers:
                 break
         except:
             # Try other root server
             pass
-    return (servers, ds, algorithm)
+    return (servers, ds_record, hash_algo)
 
-def verify_dnssec(algo, ds, dnskey, rrsig_dnskey, dnskey_record, search_domain):
-    if algo and ds and dnskey and rrsig_dnskey:
+def verify_dnssec(algo, ds_record, dnskey, rrsig_dnskey, dnskey_record, search_domain):
+    if algo and ds_record and dnskey and rrsig_dnskey:
         if algo == 1:
             algo = 'sha1'
         else:
             algo = 'sha256'
-        if dns.dnssec.make_ds(search_domain, dnskey, algo) != ds:
+        if dns.dnssec.make_ds(search_domain, dnskey, algo) != ds_record:
             print("DNSSEC verification failed")
             return False
 
@@ -175,7 +177,7 @@ def verify_dnssec(algo, ds, dnskey, rrsig_dnskey, dnskey_record, search_domain):
         return False
 
 
-def get_validate_dnssec_support(search_domain, servers, algo, ds):
+def get_validate_dnssec_support(search_domain, servers, algo, ds_record):
     ZSK = None
     RRSIG = None
     RRset = None
@@ -190,53 +192,49 @@ def get_validate_dnssec_support(search_domain, servers, algo, ds):
         print("DNSSEC not supported")
         return index, ZSK, RRSIG, RRset
 
-    if not verify_dnssec(algo, ds, ZSK, RRSIG, RRset, search_domain):
+    if not verify_dnssec(algo, ds_record, ZSK, RRSIG, RRset, search_domain):
         return len(servers), ZSK, RRSIG, RRset
     return index, ZSK, RRSIG, RRset        
 
-    
+def parse_doamin(domain):
+    domain = dns.name.from_text(domain)
+    sub_domains = str(domain).split('.')
+    return list(reversed(sub_domains))
+
 
 # Starting from root dns, this method finally resolves dns level by level.
 # However, its different from non-secure dns in its implementation.
 def get_domain_servers(domain):
-    domain = dns.name.from_text(domain)
-    sub_domains = str(domain).split('.')
-    sub_domains = list(reversed(sub_domains))
+    sub_domains = parse_doamin(domain)
     search_domain = sub_domains[1] + '.'
     servers = None
-    algorithm = None
-    ds = None 
-    (servers, ds, algorithm) = get_tld_server_details(search_domain)
+    hash_algo = None
+    ds_record = None 
+    (servers, ds_record, hash_algo) = get_tld_server_details(search_domain)
     
     if not servers:
         return None
     
     for ind in range(2, len(sub_domains)):
         current_domain = sub_domains[ind]
-        server_index = 0
-        result = None
+        next_level_servers = None
         dnskey = None
         rrsig_dnskey = None
 
-        server_index, dnskey, rrsig_dnskey, dnskey_record = get_validate_dnssec_support( \
-            search_domain, servers, algorithm, ds)
-        if server_index == len(servers):
+        ind, dnskey, rrsig_dnskey, dnskey_record = get_validate_dnssec_support( \
+            search_domain, servers, hash_algo, ds_record)
+        if ind == len(servers):
             return None            
         
-        
         search_domain = current_domain + '.' + search_domain
-        while not result:
-            try:
-                (result, ds, algorithm) = get_parent_zone_details(search_domain, servers[server_index])
-                if result:
-                    servers = result
-                else:
-                    raise Exception('Try next server')
-            except Exception:
-                server_index += 1
-                if server_index == len(servers):
-                    return None
 
+        for ind in range(0, len(servers)):
+            if next_level_servers:
+                servers = next_level_servers
+                break
+            (next_level_servers, ds_record, hash_algo) = get_parent_zone_details(search_domain, servers[ind])
+            if ind == len(servers):
+                return None
     return servers
 
 
