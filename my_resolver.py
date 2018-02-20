@@ -80,13 +80,16 @@ def get_tld_servers(tld_domain, category):
     return tld_servers
 
 
+def parse_domain(domain):
+    domain = dns.name.from_text(domain)
+    sub_domains = str(domain).split('.')
+    return list(reversed(sub_domains))
+
 # Staring from root dns, this method finally resolves dns level by level.
 # Once we traverse one level, we do not need to recursively traverse other nodes
 # at the same level as any server will list complete list of sub-domains in the next level.
 def get_domain_servers(domain, category):
-    domain = dns.name.from_text(domain)
-    sub_domains = str(domain).split('.')
-    sub_domains = list(reversed(sub_domains))
+    sub_domains = parse_domain(domain)
     search_domain = sub_domains[1] + '.'
     servers = get_tld_servers(search_domain, category)
     if servers:

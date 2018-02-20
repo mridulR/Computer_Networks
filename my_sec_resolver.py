@@ -1,9 +1,9 @@
 import sys
 import time
 import dns
+import dns.dnssec
 import dns.name
 import dns.query
-import dns.dnssec
 import dns.resolver
 
 root_servers = [
@@ -26,6 +26,57 @@ ROOT_DS_1 = "19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F
 ROOT_DS_2 = "20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D"
 
 message_size = 0
+
+# https://newsletter.dnsimple.com/dnssec-record-types/
+# @TODO : Bug while traversing response, Fix it
+def extract_zsk_rrsig_rrset(response):
+    ZSK = None
+    RRSIG = None
+    RRset = None
+
+    print(response)
+
+    for rrset in response.answer:
+        if rrset.rdtype == dns.rdatatype.DNSKEY:
+            RRset = rrset
+            for record in rrset:
+                if record.flags == 257:
+                    ZSK = record
+        elif rrset.rdtype == dns.rdatatype.RRSIG:
+            RRSIG = rrset
+        else:
+            pass
+    return (ZSK, RRSIG, RRset)
+
+# https://newsletter.dnsimple.com/dnssec-record-types/
+def get_child_zone_details(domain_search, server):
+    ZSK = None
+    RRSIG = None
+    RRset = None
+    try:
+        query = dns.message.make_query(domain_search, dns.rdatatype.DNSKEY, want_dnssec=True)
+        response = dns.query.tcp(query, server, timeout=1)
+        #print(response)
+
+        if response.rcode() != dns.rcode.NOERROR and response.rcode() == dns.rcode.NXDOMAIN:
+            return None, None, None
+
+        if len(response.answer) > 0:
+            for ans_rec in response.answer:
+                if ans_rec.rdtype == dns.rdatatype.DNSKEY:
+                    RRset = ans_rec
+                    for record in ans_rec:
+                        if record.flags == 257:
+                            ZSK = record
+                elif ans_rec.rdtype == dns.rdatatype.RRSIG:
+                    RRSIG = ans_rec
+                else:
+                    pass
+
+    except Exception:
+        return (None, None, None)
+
+    return ZSK, RRSIG, RRset
 
 # https://newsletter.dnsimple.com/dnssec-record-types-part-two/
 def get_parent_zone_details(domain_search, server):
@@ -72,57 +123,6 @@ def get_parent_zone_details(domain_search, server):
 
     return servers, ds_record, hash_algo
 
-# https://newsletter.dnsimple.com/dnssec-record-types/
-# @TODO : Bug while traversing response, Fix it
-def extract_zsk_rrsig_rrset(response):
-    ZSK = None
-    RRSIG = None
-    RRset = None
-
-    print(response)
-
-    for rrset in response.answer:
-        if rrset.rdtype == dns.rdatatype.DNSKEY:
-            RRset = rrset
-            for record in rrset:
-                if record.flags == 257:
-                    ZSK = record
-        elif rrset.rdtype == dns.rdatatype.RRSIG:
-            RRSIG = rrset
-        else:
-            pass
-    return (ZSK, RRSIG, RRset)
-
-# https://newsletter.dnsimple.com/dnssec-record-types/
-def get_child_zone_details(domain_search, server):
-    ZSK = None
-    RRSIG = None
-    RRset = None
-    try:
-        query = dns.message.make_query(domain_search, dns.rdatatype.DNSKEY, want_dnssec=True)
-        response = dns.query.tcp(query, server, timeout=1)
-        #print(response)
-
-        if response.rcode() != dns.rcode.NOERROR and response.rcode() == dns.rcode.NXDOMAIN:
-            return None, None, None
-
-        if len(response.answer) > 0:
-            for rrset in response.answer:
-                if rrset.rdtype == dns.rdatatype.DNSKEY:
-                    RRset = rrset
-                    for record in rrset:
-                        if record.flags == 257:
-                            ZSK = record
-                elif rrset.rdtype == dns.rdatatype.RRSIG:
-                    RRSIG = rrset
-                else:
-                    pass
-
-    except Exception:
-        return None, None, None
-
-    return ZSK, RRSIG, RRset
-
 # https://serverfault.com/questions/584570/can-i-reasonably-use-sha-256-in-a-dnssec-deployment
 # only validation with sha-256 is required for root servers
 def validate_root_server(server):
@@ -156,13 +156,13 @@ def get_tld_server_details(tld_domain):
             pass
     return (servers, ds_record, hash_algo)
 
-def verify_dnssec(algo, ds_record, dnskey, rrsig_dnskey, dnskey_record, search_domain):
-    if algo and ds_record and dnskey and rrsig_dnskey:
+def verify_dnssec(algo, ds_record, ZSK, rrsig_dnskey, dnskey_record, search_domain):
+    if algo and ds_record and ZSK and rrsig_dnskey:
         if algo == 1:
             algo = 'sha1'
         else:
             algo = 'sha256'
-        if dns.dnssec.make_ds(search_domain, dnskey, algo) != ds_record:
+        if dns.dnssec.make_ds(search_domain, ZSK, algo) != ds_record:
             print("DNSSEC verification failed")
             return False
 
@@ -218,10 +218,10 @@ def get_domain_servers(domain):
     for ind in range(2, len(sub_domains)):
         current_domain = sub_domains[ind]
         next_level_servers = None
-        dnskey = None
+        ZSK = None
         rrsig_dnskey = None
 
-        ind, dnskey, rrsig_dnskey, dnskey_record = get_validate_dnssec_support( \
+        ind, ZSK, rrsig_dnskey, dnskey_record = get_validate_dnssec_support( \
             search_domain, servers, hash_algo, ds_record)
         if ind == len(servers):
             return None            
