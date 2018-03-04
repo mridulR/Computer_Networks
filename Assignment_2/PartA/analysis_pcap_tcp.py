@@ -138,6 +138,7 @@ def print_loss_rate(pkts_send):
             seq_nums_seen.append(pkts_send[ind].seq_num)
     
     print "Loss rate : " + str(pkts_lost * 1.0 / len(pkts_send) )
+    return pkts_lost
 
 def print_avg_RTT(pkts_send, pkts_rcvd):
     seq_mapping = {}
@@ -159,6 +160,54 @@ def print_avg_RTT(pkts_send, pkts_rcvd):
             total_time_taken += (ack_mapping[key] - seq_mapping[key])
 
     print "Average RTT : " + str((total_time_taken * 1.0) / total_pkts)
+
+def print_congestion_window(key):
+    filter_pkts = []
+
+    for ind in range(0, len(tcp_packets)):
+        pkt = tcp_packets[ind]
+        if (pkt.src_ip == key[0] and pkt.src_port == key[1] and pkt.dest_ip == key[2] and pkt.dest_port == key[3]) or \
+            (pkt.src_ip == key[2] and pkt.src_port == key[3] and pkt.dest_ip == key[0] and pkt.dest_port == key[1]):
+            filter_pkts.append(pkt)
+
+    syn = 0
+    win_count = 0
+    for pkt in filter_pkts:
+        if pkt.src_ip == Given_Src_Ip:
+            syn = pkt.seq_num
+
+        if pkt.dest_ip == Given_Src_Ip and syn != 0 and syn - pkt.ack_num > 0:
+            win_count = win_count + 1
+            print "Congestion window : " + str(syn - pkt.ack_num)
+            syn = 0
+
+        if win_count == 10:
+            break
+
+def print_no_of_retransmissions(pkts_send, pkts_rcvd, pkts_lost):
+    seq_lost_mapping = {}
+    ack_lost_mapping = {}
+
+    for send in pkts_send:
+        if not (send.seq_num in seq_lost_mapping.keys()):
+            seq_lost_mapping[send.seq_num] = 0
+
+        seq_lost_mapping[send.seq_num] += 1
+
+    for rcv in pkts_rcvd:
+        if not (rcv.ack_num in ack_lost_mapping.keys()):
+            ack_lost_mapping[rcv.ack_num] = 0
+
+        ack_lost_mapping[rcv.ack_num] += 1
+
+
+    triple_ack_loss = 0
+    for key in seq_lost_mapping.keys():
+        if key in ack_lost_mapping.keys() and ack_lost_mapping[key] > 2:
+            triple_ack_loss += 1
+
+    print "Retransmission due to triple duplicate ack : " + str(triple_ack_loss)
+    print "Retransmission due to timeout : " + str(pkts_lost - triple_ack_loss)
 
 
 def print_num_of_tcp_flow_with_details():
@@ -182,9 +231,13 @@ def print_num_of_tcp_flow_with_details():
             ## Part A - 2.b
             print_throughput(pkts_send, pkts_rcvd)
             ## Part A - 2.c
-            print_loss_rate(pkts_send)
+            pkts_lost = print_loss_rate(pkts_send)
             ## Part A - 2.d
             print_avg_RTT(pkts_send, pkts_rcvd)
+            ## Part B - 1
+            print_congestion_window(key)
+            ## Part B - 2
+            print_no_of_retransmissions(pkts_send, pkts_rcvd, pkts_lost)
 
             print "" ## New line
 
@@ -220,7 +273,7 @@ if __name__ == "__main__":
     #print len(tcp_packets)
     #print len(get_connection_mapping())
     print_num_of_tcp_flow_with_details()
-
+    print "" ## New line
     
 
 
