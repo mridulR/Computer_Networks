@@ -64,6 +64,8 @@ def parse_and_fill_tcp_packets(time_stamp, buffer):
 
         pkt.src_port = struct.unpack(">H", buffer[34:36])[0]
         pkt.dest_port = struct.unpack(">H", buffer[36:38])[0]
+        ## print "source : " + str(pkt.src_port) + "  -  " + str(pkt.dest_port)
+
         pkt.seq_num = struct.unpack(">I", buffer[38:42])[0]
         pkt.ack_num = struct.unpack(">I", buffer[42:46])[0]
        
@@ -104,7 +106,7 @@ def get_connection_mapping():
 
 def print_seq_ack_rcv_wind(pkts_send, pkts_rcvd):
     seq_ack_rcv_win = []
-    for send in range(2, len(pkts_send)):
+    for send in range(2, len(pkts_send)): ## After SYN, SYN/ACK and ACK packets
         seq_ack_rcv_win = []
         for rcv in range(1, len(pkts_rcvd)):
             if pkts_send[send].seq_num + pkts_send[send].length == 34 + pkts_rcvd[rcv].ack_num:
@@ -131,7 +133,7 @@ def print_throughput(pkts_send, pkts_rcvd):
 def print_loss_rate(pkts_send):
     pkts_lost = 0
     seq_nums_seen = []
-    for ind in range(2, len(pkts_send)):
+    for ind in range(3, len(pkts_send)):
         if pkts_send[ind].seq_num in seq_nums_seen:
             pkts_lost += 1
         else :
@@ -154,12 +156,15 @@ def print_avg_RTT(pkts_send, pkts_rcvd):
 
     total_pkts = 0
     total_time_taken = 0
+    count = 0
     for key in seq_mapping.keys():
         if key in ack_mapping.keys():
             total_pkts += 1
             total_time_taken += (ack_mapping[key] - seq_mapping[key])
+        else:
+            count += 1
 
-    print "Average RTT : " + str((total_time_taken * 1.0) / total_pkts)
+    print "Average RTT : " + str((total_time_taken * 1.0) / total_pkts) ## + "----" + str(count)
 
 def print_congestion_window(key):
     filter_pkts = []
