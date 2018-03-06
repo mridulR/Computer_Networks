@@ -26,6 +26,7 @@ class TCP_Packet:
     ack_num = 0
     offset = 0
     reserved = 0
+    mss = 0
     ## ECN - http://www.networksorcery.com/enp/protocol/tcp.htm
     ns = 0
     cwr = 0
@@ -87,6 +88,8 @@ def parse_and_fill_tcp_packets(time_stamp, buffer):
         pkt.syn = int(bin[14])
         pkt.fin = int(bin[15])
 
+        if pkt.syn == 1 and pkt.ack == 1:
+            pkt.mss = int( struct.unpack(">H", buffer[56:58])[0])
 
         pkt.window = struct.unpack(">H", buffer[48:50])[0]
         pkt.check_sum = struct.unpack(">H", buffer[50:52])[0]
@@ -111,7 +114,7 @@ def print_seq_ack_rcv_wind(pkts_send, pkts_rcvd):
 
             if pkts_send[send].seq_num + pkts_send[send].length - 66 == pkts_rcvd[rcv].ack_num:
                 seq_ack_rcv_win.add((pkts_send[send].seq_num, pkts_send[send].ack_num, \
-                    pkts_rcvd[rcv].seq_num, pkts_rcvd[rcv].ack_num, pkts_send[send].window))
+                    pkts_rcvd[rcv].seq_num, pkts_rcvd[rcv].ack_num, (2 ** 14) * pkts_send[send].window))
 
             if len(seq_ack_rcv_win) == 2:
                 break
@@ -229,6 +232,7 @@ def print_num_of_tcp_flow_with_details():
 
             for tcp_packet in pkts_rcvd:
                 if tcp_packet.ack == 1 and tcp_packet.syn == 1:
+                    print "MSS : " + str(tcp_packet.mss)
                     tcp_flows = tcp_flows + 1
             
             ## Part A - 2.a

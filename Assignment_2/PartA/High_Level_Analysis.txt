@@ -1,0 +1,106 @@
+
+High level view of code:
+
+    dpkt and struct libraries are used to parse pcap file. dpkt lists the ethernet packets in little endian byte format with time stamp.
+    struct packet is used to parse bytes and convert it to big endian format. A TCP class is created with diferent fields and packets
+    from the file are parsed to populate respective fields. All the references used for understanding the structure of packets are
+    quoted in comments.
+
+    First of all packets are partitioned into connections - source ip, source port, destination ip and destination port. Now for each connections
+    packets are partitioned into send list and receive list. Now all parts of the questions are answered using this send and receive list for each
+    connection.
+
+
+Answer about calculating different values.
+
+    1. Count the number	of TCP flows initiated from the	sender ?
+    Answer : 3
+       TCP flows are calculated by capturing SYN/ACK packets. There is only one SYN/ACK packet for a connection which occurs during handshake.
+       Therefore, capturing this packet gives the total number of TCP Flows.
+
+    2. For each flow,
+        a.) We have to calculate Sequence Number, Ack number, and Receive Window size for first two transactions after hansdshake.
+    Answer : Data is printed in the following format :
+            <<Sender Seq Num, Sender Ack Num, Receiver Seq Num, Receiver Ack Num, Window Size>>
+
+            For flow : 1
+            Sender Seq Num, Sender Ack Num, Receiver Seq Num, Receiver Ack Num, Window Size
+            (3636173876, 2335809728, 2335809728, 3636175324, 49152)
+            (3636173852, 2335809728, 2335809728, 3636173876, 49152)
+
+            For flow : 2
+            Sender Seq Num, Sender Ack Num, Receiver Seq Num, Receiver Ack Num, Window Size
+            (2558634630, 3429921723, 3429921723, 2558634654, 49152)
+            (2558634654, 3429921723, 3429921723, 2558636102, 49152)
+
+            The calculation is straigt forward. We iterate through the send list. To sequence number of sender packet we add its length and 
+            subtract the fixed header size which is 65 bytes. We search for this value in acknowledgement number of received packets. We print
+            two such values and break from the loop afterwards. Window size is calculated as (2^14) * value obtained from TCP header (3 in our case).
+
+       b.)  Compute the throughput for data sent from source to destination.
+    Answer : We have defined throughput as total bytes send across tcp connection divided by total time taken.
+
+            We added all the headers and data in packets for every TCP flow. We divided it by the difference in timestamp of first and last timestamp.
+            
+            Following are the captured values :
+            Flow 1:
+            Throughput : 1285424.88902 bytes/ms
+            Flow 2:
+            Throughput : 1481548.374
+            Flow 3:
+            Throughput : 5251440.93545
+
+
+      c.) Compute the loss rate for each flow.
+    Answer : Loss rate is defined as number of packets not received divided by total number of packets send.
+
+            To calculate this, we iterate through send packets of the TCP Flow. Whichever seq num is repeated, means that packet is resend. Therefore, we
+            keep on increasing the loss packet count. At the end of the loop, we divide this number by total length of send packets list.
+            This gives the loss rate.
+
+            Following are the captured values:
+            Flow 1:
+            Loss rate : 0.013299377475
+            Flow 2:
+            Loss rate : 0.0
+            Flow 3:
+            Loss rate : 0.000429984233911
+
+
+     d.)  Estimate the average RTT. Now compare your empirical throughput from (b) and the theoretical throughput (estimated using the formula derived in class). Explain your comparison.
+    Answer : Calculating the average RTT is straight forward. We create map of seq number with time stamp for send packets and similar mapping of ack number with their timestamp.
+             After building this map, we iterate through send packets and calculate the time stamp difference for the corresponsing ack packet. This is one RTT. We calculate the average RTT
+             by adding all this time stamp differences and dividing by the number of seq-ack pairs.
+
+             For theoritical throughput, we use the formula: (sqrt(3/2) * MSS)/(sqrt(loss rate) * average RTT)
+
+             Following are captured and theoritical values :
+
+             Flow 1:
+                    MSS : 1460
+                    Throughput : 1285424.88902
+                    Loss rate : 0.0132993774759
+                    Average RTT : 0.167151638035
+                    
+                    Experimental thoughput : 92795.521
+
+
+             Flow 2:
+                   MSS : 1460
+                   Throughput : 1481548.3748
+                   Loss rate : 0.0
+                   Average RTT : 0.0720596951351
+
+                   Experimental thoughput : Not defined as loss rate is 0
+
+             Flow 3:
+                  MSS : 1460
+                  Throughput : 5251440.93545
+                  Loss rate : 0.000429984233911
+                  Average RTT : 0.0731438426165
+            
+                  Experimental thoughput : 372,856.73611
+
+             There is difference between experimental and calculated throughput, as experimental throughput is calculated based on actual values. However, calculated throughput uses averaged value of RTT.
+
+        
