@@ -1,0 +1,200 @@
+
+1.) tcpdump commands used :
+
+        a.) sudo tcpdump -i en0 -n port 1080 -w http_1080.pcap
+        b.) sudo tcpdump -i en0 -n port 1081 -w tcp_1081.pcap
+        c.) sudo tcpdump -i en0 -n port 1082 -w tcp_1082.pcap
+
+
+2.) High level analysis of the code :
+         
+        This code is extention of the code for Part A. Few extra fields are added to TCP packet to capture http 1.0
+        information. http_1080.pcap file is parsed to store request/response information by matching the initial
+        payload with "GET" or "HTTP" string.
+
+        Now, to reassemble each HTTP request, we make use of the fact that request and response comes in order.
+        We store the HTTP request response in separate list while parsing. Once parsing is done, we match them
+        and print in order.
+
+        To figure out HTTP protocol, we count number of connections. In HTTP/1.0 every object is exchanged in
+        separate TCP connection. So we have 18 TCP connections. In case of HTTP/1.1 fixed number of connections mostly
+        6 are used. However, in case of HTTP/2 single connection is used to manage transfer of all objects.
+    
+
+3.) Answer to the question asked :
+    
+    a.) Reassemble each unique HTTP Request/Response for http_1080.pcap
+
+        Request No : 1
+        Request Type : GET request
+        Src Address : 172.24.26.76:49672, Dest Address : 34.193.77.105:1080, Seq Num : 403966145, Ack Num : 4191583887
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49672, Seq Num : 4191583887, Ack Num : 403966546
+
+
+        Request No : 2
+        Request Type : GET request
+        Src Address : 172.24.26.76:49673, Dest Address : 34.193.77.105:1080, Seq Num : 324547772, Ack Num : 3429133112
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49673, Seq Num : 3429133112, Ack Num : 324548156
+
+
+        Request No : 3
+        Request Type : GET request
+        Src Address : 172.24.26.76:49674, Dest Address : 34.193.77.105:1080, Seq Num : 1325748680, Ack Num : 2418672874
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49674, Seq Num : 2418672874, Ack Num : 1325749025
+
+
+        Request No : 4
+        Request Type : GET request
+        Src Address : 172.24.26.76:49675, Dest Address : 34.193.77.105:1080, Seq Num : 2531019157, Ack Num : 58679761
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49677, Seq Num : 4150562658, Ack Num : 3929322729
+
+
+        Request No : 5
+        Request Type : GET request
+        Src Address : 172.24.26.76:49677, Dest Address : 34.193.77.105:1080, Seq Num : 3929322344, Ack Num : 4150562658
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49675, Seq Num : 58679761, Ack Num : 2531019542
+
+
+        Request No : 6
+        Request Type : GET request
+        Src Address : 172.24.26.76:49676, Dest Address : 34.193.77.105:1080, Seq Num : 1856450747, Ack Num : 4231214049
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49678, Seq Num : 3655015159, Ack Num : 118775480
+
+
+        Request No : 7
+        Request Type : GET request
+        Src Address : 172.24.26.76:49678, Dest Address : 34.193.77.105:1080, Seq Num : 118775085, Ack Num : 3655015159
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49676, Seq Num : 4231214049, Ack Num : 1856451136
+
+
+        Request No : 8
+        Request Type : GET request
+        Src Address : 172.24.26.76:49679, Dest Address : 34.193.77.105:1080, Seq Num : 1552374230, Ack Num : 2005201619
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49679, Seq Num : 2005201619, Ack Num : 1552374623
+
+
+        Request No : 9
+        Request Type : GET request
+        Src Address : 172.24.26.76:49680, Dest Address : 34.193.77.105:1080, Seq Num : 659354418, Ack Num : 2778055164
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49681, Seq Num : 1261339404, Ack Num : 2399711476
+
+
+        Request No : 10
+        Request Type : GET request
+        Src Address : 172.24.26.76:49681, Dest Address : 34.193.77.105:1080, Seq Num : 2399711088, Ack Num : 1261339404
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49680, Seq Num : 2778055164, Ack Num : 659354808
+
+
+        Request No : 11
+        Request Type : GET request
+        Src Address : 172.24.26.76:49682, Dest Address : 34.193.77.105:1080, Seq Num : 4262224987, Ack Num : 421961340
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49682, Seq Num : 421961340, Ack Num : 4262225377
+
+
+        Request No : 12
+        Request Type : GET request
+        Src Address : 172.24.26.76:49683, Dest Address : 34.193.77.105:1080, Seq Num : 2561668406, Ack Num : 265411003
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49683, Seq Num : 265411003, Ack Num : 2561668794
+
+
+        Request No : 13
+        Request Type : GET request
+        Src Address : 172.24.26.76:49684, Dest Address : 34.193.77.105:1080, Seq Num : 575424280, Ack Num : 1972696461
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49684, Seq Num : 1972696461, Ack Num : 575424669
+
+
+        Request No : 14
+        Request Type : GET request
+        Src Address : 172.24.26.76:49686, Dest Address : 34.193.77.105:1080, Seq Num : 239872654, Ack Num : 2424220455
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49686, Seq Num : 2424220455, Ack Num : 239873044
+
+
+        Request No : 15
+        Request Type : GET request
+        Src Address : 172.24.26.76:49685, Dest Address : 34.193.77.105:1080, Seq Num : 1124535187, Ack Num : 2518505552
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49687, Seq Num : 1162593950, Ack Num : 1398344984
+
+
+        Request No : 16
+        Request Type : GET request
+        Src Address : 172.24.26.76:49687, Dest Address : 34.193.77.105:1080, Seq Num : 1398344599, Ack Num : 1162593950
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49685, Seq Num : 2518505552, Ack Num : 1124535575
+
+
+        Request No : 17
+        Request Type : GET request
+        Src Address : 172.24.26.76:49688, Dest Address : 34.193.77.105:1080, Seq Num : 2843388590, Ack Num : 1613280790
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49688, Seq Num : 1613280790, Ack Num : 2843388975
+
+
+        Request No : 18
+        Request Type : GET request
+        Src Address : 172.24.26.76:49689, Dest Address : 34.193.77.105:1080, Seq Num : 1282308817, Ack Num : 4184307883
+        Request Type : HTTP response
+        Src Address : 34.193.77.105:1080, Dest Address : 172.24.26.76:49689, Seq Num : 4184307883, Ack Num : 1282309198
+
+
+
+    b.) Identify which HTTP protocol is being used for each	PCAP file.
+        
+        Total pkts send : 2655
+        Total bytes transferred : 2321457
+        Time taken to load page : 0.356924057007
+        Total connections for port 1080 : 18
+        Since each object is transferred in different TCP connection, HTTP protocol is : HTTP/1.0
+
+        Total pkts send : 2593
+        Total bytes transferred : 2343445
+        Time taken to load page : 0.23682808876
+        Total connections for port 1081 : 6
+        Since fixed multiple TCP connections are used to tranfer objects, HTTP protocol is : HTTP/1.1
+
+        Total pkts send : 2111
+        Total bytes transferred : 2311942
+        Time taken to load page : 0.42499089241
+        Total connections for port 1082 : 1
+        Since single TCP connections are used to transfer objects, HTTP protocol is : HTTP/2
+
+
+    c.) Finally, after you’ve labeled the PCAPs	with their appropriate versions of HTTP, answer	the following: Which version of the protocol did
+    	the site load the fastest under? The Slowest? Which sent the most number of packets and raw bytes?	Which protocol sent the least? Report
+    	your results and write a brief explanation for your observations.
+
+        Explanation : 
+            
+                    As printed in the output,
+                                HTTP/1.1 is the fastest and HTTP/2 is the slowest of the three protocols.
+                                HTTP/1.0 send the maximum number of packets and HTTP/2 send minimum number of packets.
+                                HTTP/1.1 send maximum number of raw bytes and HTTP/2 send minimum number of raw bytes.
+
+                    HTTP/1.1 appears fastest as the ususal benefits of HTTP/2 are not evident while loading the given site. 6 parallel connects in HTTP/1.1 outperforms
+                    pipelining of requests in HTTP/2. Since the site has large 17 large images, they are send fastly over parallel connection of HTTP/1.1
+
+                    Number of packets send by HTTP/1.0 is more due to multiple hanshaking happening and FIN packet exchanged for closing connection. As expected, this 
+                    is close to HTTP/1.1. Small difference may be because of packet loss. Similarly, there is slightly larger number of raw bytes in HTTP/1.1 than
+                    HTTP/1.0.
+
+                              
+
+
+
+
+	
+
