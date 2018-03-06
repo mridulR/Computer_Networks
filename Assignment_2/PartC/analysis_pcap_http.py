@@ -49,7 +49,6 @@ class TCP_Packet:
 
 tcp_packets = []
 http_packets = []
-Given_Src_Ip = '174.24.26.76'
 
 def parse_and_fill_tcp_packets(time_stamp, buffer):
     if struct.unpack(">B", buffer[23])[0] == 6: ## Fill TCP packets
@@ -141,8 +140,6 @@ def reassemble_http_request_response_http_1080():
         print "" ## new line
 
     print "" ## new line
-
-
 
 
 def print_connections_with_1080():

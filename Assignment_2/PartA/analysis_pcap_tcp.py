@@ -105,18 +105,18 @@ def get_connection_mapping():
     return map
 
 def print_seq_ack_rcv_wind(pkts_send, pkts_rcvd):
-    seq_ack_rcv_win = []
-    for send in range(2, len(pkts_send)): ## After SYN, SYN/ACK and ACK packets
-        seq_ack_rcv_win = []
-        for rcv in range(1, len(pkts_rcvd)):
-            if pkts_send[send].seq_num + pkts_send[send].length == 34 + pkts_rcvd[rcv].ack_num:
-                seq_ack_rcv_win.append((pkts_send[send].seq_num, pkts_send[send].ack_num, 
+    seq_ack_rcv_win = set()
+    for send in range(2, len(pkts_send)): ## After SYN and ACK packets
+        for rcv in range(1, len(pkts_rcvd)): ## After SYN/ACK packet
+
+            if pkts_send[send].seq_num + pkts_send[send].length - 66 == pkts_rcvd[rcv].ack_num:
+                seq_ack_rcv_win.add((pkts_send[send].seq_num, pkts_send[send].ack_num, \
                     pkts_rcvd[rcv].seq_num, pkts_rcvd[rcv].ack_num, pkts_send[send].window))
 
             if len(seq_ack_rcv_win) == 2:
-                for val in seq_ack_rcv_win:
-                    print(val)
                 break
+    for val in seq_ack_rcv_win:
+        print(val)
 
 def print_throughput(pkts_send, pkts_rcvd):
     total_send_data = 0
@@ -232,7 +232,11 @@ def print_num_of_tcp_flow_with_details():
                     tcp_flows = tcp_flows + 1
             
             ## Part A - 2.a
-            print_seq_ack_rcv_wind(pkts_send, pkts_rcvd)
+            if tcp_flows < 3:
+                print "For flow : " + str(tcp_flows)
+                print "Sender Seq Num, Sender Ack Num, Receiver Seq Num, Receiver Ack Num, Window Size"
+                print_seq_ack_rcv_wind(pkts_send, pkts_rcvd)
+                print ""
             ## Part A - 2.b
             print_throughput(pkts_send, pkts_rcvd)
             ## Part A - 2.c
