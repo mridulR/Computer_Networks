@@ -13,6 +13,7 @@ hosts = ['H1', 'H2', 'R1', 'R2', 'R3', 'R4']
 neighbouring_nodes = {}
 distance_vector = {}   ###   This is critical section. Update it using locks. <rechable_node>, (<cost, next_hop>)
 lock = Lock()
+current_time = 0
 
 '''
 Print distance vector in the form <Reachable Node> <Cost> <Next Hop>
@@ -28,6 +29,8 @@ def print_distance_vector(host_name):
         else:
             cost = str(cost)
         print '%s \t %s \t %s \n' % (reach_node, cost, distance_vector[reach_node][1])
+    millis = int(round(time.time() * 1000)) - current_time
+    print 'time taken - %s'  %(millis)    
     print '\n'
 
 '''
@@ -196,7 +199,8 @@ if __name__ == '__main__':
     server = start_server(host_name, host_port)
 
     time.sleep(15) ## For binding every server to port before clients start updating distance vector
-
+    current_time =  int(round(time.time() * 1000))
+    
     monitor = start_monitoring_topology_file(host_name)
     
     start_clients(server, monitor, host_name)
